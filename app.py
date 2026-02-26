@@ -167,17 +167,37 @@ def query():
                 session["awaiting_phone"] = False
                 _save_lead(phone, session)
                 reply = "Thank you! I have noted your number. The IST admissions office will call you back. Is there anything else I can help you with?"
+                audio_url = tts.synthesize(reply, session_id)
+                session["history"].append({"user": user_text, "assistant": reply})
+                session["turns"] += 1
+                return jsonify({
+                    "text": reply,
+                    "user_text": user_text,
+                    "audio_url": audio_url,
+                    "end_call": False,
+                })
             else:
-                reply = "I could not catch your phone number. Could you please say it again slowly? For example, zero three zero zero, one two three four five six seven."
-            audio_url = tts.synthesize(reply, session_id)
-            session["history"].append({"user": user_text, "assistant": reply})
-            session["turns"] += 1
-            return jsonify({
-                "text": reply,
-                "user_text": user_text,
-                "audio_url": audio_url,
-                "end_call": False,
-            })
+                skip_phrases = ["no", "don't", "dont", "skip", "never mind", "nevermind",
+                                "tell me", "what", "how", "which", "does", "is ", "are ",
+                                "can ", "do ", "fee", "program", "merit", "hostel",
+                                "department", "admission", "eligib", "deadline"]
+                text_lower = user_text.lower()
+                is_new_question = any(p in text_lower for p in skip_phrases)
+
+                if is_new_question:
+                    session["awaiting_phone"] = False
+                    print(f"[Query] User skipped phone, continuing with new question")
+                else:
+                    reply = "I could not catch your phone number. Could you please say it again, or ask me another question."
+                    audio_url = tts.synthesize(reply, session_id)
+                    session["history"].append({"user": user_text, "assistant": reply})
+                    session["turns"] += 1
+                    return jsonify({
+                        "text": reply,
+                        "user_text": user_text,
+                        "audio_url": audio_url,
+                        "end_call": False,
+                    })
 
         prev_user = ""
         if session["history"]:
