@@ -2,7 +2,7 @@
 Speech-to-Text via Groq Whisper with post-processing corrections.
 """
 
-import os, re, tempfile
+import os, re, tempfile, time
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
@@ -23,7 +23,13 @@ CORRECTIONS = {
 def transcribe(audio_bytes: bytes, content_type: str = "audio/webm") -> str:
     from groq import Groq
 
+    if not GROQ_API_KEY:
+        print("[STT] ERROR: GROQ_API_KEY is not set!")
+        return ""
+
     client = Groq(api_key=GROQ_API_KEY)
+
+    print(f"[STT] Received {len(audio_bytes)} bytes, type={content_type}")
 
     suffix = ".webm"
     if "wav" in content_type:
@@ -39,6 +45,7 @@ def transcribe(audio_bytes: bytes, content_type: str = "audio/webm") -> str:
     tmp.close()
 
     try:
+        start = time.time()
         with open(tmp.name, "rb") as audio_file:
             transcription = client.audio.transcriptions.create(
                 file=(f"audio{suffix}", audio_file),
@@ -47,6 +54,11 @@ def transcribe(audio_bytes: bytes, content_type: str = "audio/webm") -> str:
                 response_format="text",
             )
         text = str(transcription).strip()
+        elapsed = round(time.time() - start, 2)
+        print(f"[STT] Transcribed in {elapsed}s: '{text}'")
+    except Exception as e:
+        print(f"[STT] ERROR: {e}")
+        return ""
     finally:
         try:
             os.unlink(tmp.name)

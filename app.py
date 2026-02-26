@@ -134,10 +134,13 @@ def query():
 
     audio_bytes = audio_file.read()
     content_type = audio_file.content_type or "audio/webm"
+    print(f"[Query] Session={session_id}, audio={len(audio_bytes)} bytes, type={content_type}")
 
     user_text = stt.transcribe(audio_bytes, content_type)
+    print(f"[Query] STT result: '{user_text}'")
 
     if not user_text or len(user_text.strip()) < 2:
+        print(f"[Query] STT returned empty/short text, skipping")
         return jsonify({"error": "Could not understand audio", "text": ""}), 200
 
     if _is_end_call(user_text):

@@ -342,13 +342,14 @@
 <div class="footer">Institute of Space Technology, Islamabad</div>
 
 <script>
-const SILENCE_THRESHOLD = 0.015;
-const SILENCE_DURATION_MS = 1800;
-const BARGE_IN_THRESHOLD = 0.045;
-const BARGE_IN_DURATION_MS = 400;
-const MIN_RECORDING_MS = 800;
+const SILENCE_THRESHOLD = 0.012;
+const SPEECH_THRESHOLD = 0.025;
+const SILENCE_DURATION_MS = 2000;
+const BARGE_IN_THRESHOLD = 0.05;
+const BARGE_IN_DURATION_MS = 500;
+const MIN_RECORDING_MS = 1200;
 
-let state = 'idle'; // idle | greeting | listening | processing | speaking | ended
+let state = 'idle';
 let sessionId = null;
 let mediaRecorder = null;
 let audioChunks = [];
@@ -360,6 +361,7 @@ let recordingStart = null;
 let currentAudio = null;
 let bargeInChecker = null;
 let vizBars = [];
+let speechDetected = false;
 
 const statusEl = document.getElementById('status');
 const callBtn = document.getElementById('callBtn');
@@ -470,13 +472,14 @@ function startListening() {
 
 function startRecording() {
     audioChunks = [];
+    speechDetected = false;
     try {
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
     } catch (e) {
         mediaRecorder = new MediaRecorder(stream);
     }
     mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-    mediaRecorder.start(100);
+    mediaRecorder.start(250);
     recordingStart = Date.now();
     silenceStart = null;
 }
@@ -498,7 +501,6 @@ function monitorSilence() {
     for (let i = 0; i < bufLen; i++) sum += data[i] * data[i];
     const rms = Math.sqrt(sum / bufLen);
 
-    // Update visualizer
     const freqData = new Uint8Array(bufLen);
     analyser.getByteFrequencyData(freqData);
     for (let i = 0; i < vizBars.length; i++) {
@@ -507,15 +509,16 @@ function monitorSilence() {
         vizBars[i].style.height = h + 'px';
     }
 
-    if (rms < SILENCE_THRESHOLD) {
+    if (rms >= SPEECH_THRESHOLD) {
+        speechDetected = true;
+        silenceStart = null;
+    } else if (rms < SILENCE_THRESHOLD && speechDetected) {
         if (!silenceStart) silenceStart = Date.now();
         if (Date.now() - silenceStart > SILENCE_DURATION_MS &&
             recordingStart && Date.now() - recordingStart > MIN_RECORDING_MS) {
             onSilenceDetected();
             return;
         }
-    } else {
-        silenceStart = null;
     }
 
     requestAnimationFrame(monitorSilence);
@@ -524,19 +527,40 @@ function monitorSilence() {
 async function onSilenceDetected() {
     if (state !== 'listening') return;
     state = 'processing';
-    setStatus('Processing...', 'processing');
+    setStatus('Processing your question...', 'processing');
     visualizerEl.classList.remove('visible');
     avatarEl.classList.remove('active');
 
-    stopRecording();
-    await new Promise(r => setTimeout(r, 150));
+    const recorder = mediaRecorder;
+    const chunks = audioChunks;
 
-    if (audioChunks.length === 0) {
+    await new Promise((resolve) => {
+        if (recorder && recorder.state !== 'inactive') {
+            recorder.onstop = () => resolve();
+            recorder.stop();
+        } else {
+            resolve();
+        }
+    });
+    mediaRecorder = null;
+
+    await new Promise(r => setTimeout(r, 100));
+
+    if (chunks.length === 0 || !speechDetected) {
+        console.log('No speech detected, resuming listening');
         startListening();
         return;
     }
 
-    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+    console.log('Sending audio:', blob.size, 'bytes');
+
+    if (blob.size < 1000) {
+        console.log('Audio too small, resuming listening');
+        startListening();
+        return;
+    }
+
     const formData = new FormData();
     formData.append('audio', blob, 'recording.webm');
     formData.append('session_id', sessionId);
@@ -544,9 +568,12 @@ async function onSilenceDetected() {
     try {
         const res = await fetch('/api/query', { method: 'POST', body: formData });
         const data = await res.json();
+        console.log('Server response:', data);
 
         if (data.error && !data.text) {
-            startListening();
+            setStatus('Could not hear you clearly — try again', 'listening');
+            await new Promise(r => setTimeout(r, 1000));
+            if (state !== 'ended') startListening();
             return;
         }
 
@@ -578,7 +605,8 @@ async function onSilenceDetected() {
         if (state !== 'ended') startListening();
     } catch (e) {
         console.error('Query error:', e);
-        setStatus('Connection error — listening again...', 'listening');
+        setStatus('Connection error — retrying...', 'listening');
+        await new Promise(r => setTimeout(r, 1500));
         if (state !== 'ended') startListening();
     }
 }
