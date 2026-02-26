@@ -566,13 +566,27 @@ async function onSilenceDetected() {
     formData.append('session_id', sessionId);
 
     try {
+        setStatus('Sending to server...', 'processing');
         const res = await fetch('/api/query', { method: 'POST', body: formData });
-        const data = await res.json();
+        console.log('Response status:', res.status);
+
+        let data;
+        const responseText = await res.text();
+        try {
+            data = JSON.parse(responseText);
+        } catch (parseErr) {
+            console.error('Non-JSON response:', responseText.substring(0, 500));
+            setStatus('Server error — retrying...', 'listening');
+            await new Promise(r => setTimeout(r, 2000));
+            if (state !== 'ended') startListening();
+            return;
+        }
         console.log('Server response:', data);
 
         if (data.error && !data.text) {
+            console.log('Server returned error:', data.error);
             setStatus('Could not hear you clearly — try again', 'listening');
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 1200));
             if (state !== 'ended') startListening();
             return;
         }
@@ -604,9 +618,9 @@ async function onSilenceDetected() {
 
         if (state !== 'ended') startListening();
     } catch (e) {
-        console.error('Query error:', e);
-        setStatus('Connection error — retrying...', 'listening');
-        await new Promise(r => setTimeout(r, 1500));
+        console.error('Fetch failed:', e.message, e);
+        setStatus('Connection error: ' + e.message, 'listening');
+        await new Promise(r => setTimeout(r, 2000));
         if (state !== 'ended') startListening();
     }
 }
