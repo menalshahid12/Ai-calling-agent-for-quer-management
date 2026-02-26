@@ -7,4 +7,6 @@ Admissions office: Phone 051 9075100, or 051 9075492, 9075606, 9075472, 9075406.
 
 Admission and fee pages: ist.edu.pk/admission-fee-structure-bs-programs (BS fee), ist.edu.pk/admission-fee-structure-ms-local-programs (MS and PhD fee). FAQ: ist.edu.pk/admission-faq. Undergraduate info: ist.edu.pk/admission-undergraduate-info.
 
-Use this to answer queries about how to apply, whom to contact, and where to apply. Give the information above directly; do not tell the user to "check the website" or "call" as the main answer.
+University timings: IST campus operating hours are 8:00 AM to 4:00 PM, Monday to Friday. Offices and departments follow these timings.
+
+Use this to answer queries about how to apply, whom to contact, where to apply, and university timings. Give the information above directly; do not tell the user to "check the website" or "call" as the main answer.
