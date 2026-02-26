@@ -26,7 +26,7 @@ CALL_RECORDS = os.path.join(LOGS_DIR, "call_records.json")
 _sessions: dict[str, dict] = {}
 _log_lock = threading.Lock()
 
-GREETING = "Hello, this is IST calling agent. What is your query?"
+GREETING = "Hello, this is the Institute of Space Technology calling agent. What's your query?"
 
 END_PHRASES = [
     "no more questions", "end call", "goodbye", "good bye", "bye",

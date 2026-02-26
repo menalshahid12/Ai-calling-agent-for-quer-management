@@ -12,6 +12,8 @@ CORRECTIONS = {
     r"\bisd\b": "IST",
     r"\bist\b": "IST",
     r"\bi\.s\.t\.?\b": "IST",
+    r"\biced\b": "IST",
+    r"\bisty\b": "IST",
     r"\bspace technology\b": "Space Technology",
     r"\baerospace\b": "Aerospace",
     r"\bavionics\b": "Avionics",
