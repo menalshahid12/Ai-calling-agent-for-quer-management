@@ -52,6 +52,21 @@ UNNECESSARY_ESCALATION_PATTERNS = [
 ]
 
 
+def _context_has_relevant_info(query: str, context: str) -> bool:
+    if not context or context == "No relevant information found.":
+        return False
+    q_lower = query.lower()
+    relevance_words = ["fee", "program", "department", "merit", "aggregate", "hostel",
+                       "transport", "admission", "eligib", "deadline", "scholarship",
+                       "semester", "lakh", "thousand", "engineering", "computer",
+                       "aerospace", "electrical", "avionics", "mechanical", "science",
+                       "apply", "entry test", "nat", "bs ", "ms ", "phd"]
+    for word in relevance_words:
+        if word in q_lower and word in context.lower():
+            return True
+    return False
+
+
 def generate_answer(user_query: str, context: str, conversation_history: list[dict]) -> str:
     from groq import Groq
 
@@ -78,80 +93,54 @@ def generate_answer(user_query: str, context: str, conversation_history: list[di
 
 Caller's question: {user_query}
 
-IMPORTANT: Read the context above carefully. If it contains ANY information relevant to this question, answer from it directly. Only escalate if the context has absolutely nothing relevant."""
+IMPORTANT: The context above contains the answer. Read it carefully and answer directly. Do NOT escalate or forward the query — the information IS in the context above."""
 
     messages.append({"role": "user", "content": user_content})
 
-    try:
-        start = time.time()
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            temperature=0.2,
-            max_tokens=300,
-        )
-        answer = response.choices[0].message.content.strip()
-        elapsed = round(time.time() - start, 2)
-        print(f"[LLM] Generated in {elapsed}s: '{answer[:100]}'")
-    except Exception as e:
-        print(f"[LLM] Error: {e}")
-        answer = ESCALATION_MSG
+    has_context = _context_has_relevant_info(user_query, context)
+    max_attempts = 2 if has_context else 1
 
-    answer = _sanitize_answer(answer)
-
-    if _is_unnecessary_escalation(answer, context, user_query):
-        print("[LLM] Detected unnecessary escalation, retrying with stronger prompt")
-        retry_content = f"""The context below DOES contain information about this topic. You MUST answer from it.
-
-=== IST CONTEXT ===
-{context}
-=== END CONTEXT ===
-
-Question: {user_query}
-
-The context above has the answer. Extract it and respond directly. Do NOT escalate. Do NOT say you will forward the query."""
-
+    for attempt in range(max_attempts):
         try:
-            retry_msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
-            retry_msgs.append({"role": "user", "content": retry_content})
-            response2 = client.chat.completions.create(
+            start = time.time()
+            response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=retry_msgs,
-                temperature=0.1,
+                messages=messages,
+                temperature=0.1 + (attempt * 0.15),
                 max_tokens=300,
             )
-            answer2 = response2.choices[0].message.content.strip()
-            answer2 = _sanitize_answer(answer2)
-            if not _looks_like_escalation(answer2):
-                print(f"[LLM] Retry succeeded: '{answer2[:80]}'")
-                return answer2
+            answer = response.choices[0].message.content.strip()
+            elapsed = round(time.time() - start, 2)
+            print(f"[LLM] Attempt {attempt+1}, {elapsed}s: '{answer[:100]}'")
         except Exception as e:
-            print(f"[LLM] Retry error: {e}")
+            print(f"[LLM] Error: {e}")
+            answer = ESCALATION_MSG
+
+        answer = _sanitize_answer(answer, context)
+
+        is_escalation = (answer == ESCALATION_MSG or
+                         "forward" in answer.lower() and "phone" in answer.lower())
+
+        if is_escalation and has_context and attempt < max_attempts - 1:
+            print(f"[LLM] Escalated despite context existing — retrying (attempt {attempt+2})")
+            if messages[-1]["role"] == "user":
+                messages[-1]["content"] += "\n\nYou MUST answer from the context. The answer IS there. Do NOT ask for a phone number. Just answer the question directly."
+            continue
+
+        return answer
 
     return answer
 
 
-def _is_unnecessary_escalation(answer: str, context: str, query: str) -> bool:
-    if not _looks_like_escalation(answer):
-        return False
-    if not context or context == "No relevant information found.":
-        return False
-    query_lower = query.lower()
-    context_lower = context.lower()
-    query_words = set(re.findall(r"\w{3,}", query_lower))
-    matching = sum(1 for w in query_words if w in context_lower)
-    return matching >= 2
-
-
-def _looks_like_escalation(answer: str) -> bool:
-    lower = answer.lower()
-    return ("forward" in lower and "query" in lower) or \
-           ("phone number" in lower and "call you back" in lower) or \
-           answer.strip() == ESCALATION_MSG
-
-
-def _sanitize_answer(answer: str) -> str:
+def _sanitize_answer(answer: str, context: str = "") -> str:
     for pattern in TECHNICAL_ISSUE_PATTERNS:
         if re.search(pattern, answer, re.IGNORECASE):
             return ESCALATION_MSG
+
+    if context and context != "No relevant information found.":
+        for pattern in UNNECESSARY_ESCALATION_PATTERNS:
+            if re.search(pattern, answer, re.IGNORECASE):
+                print(f"[LLM] WARNING: LLM tried to dodge when context exists, forcing re-answer is not possible, returning escalation")
+                return ESCALATION_MSG
+
     return answer
