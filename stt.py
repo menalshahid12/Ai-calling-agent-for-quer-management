@@ -9,7 +9,9 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 CORRECTIONS = {
     r"\bees\b": "fees",
     r"\bfree\b(?=\s+(structure|per|semester))": "fee",
+    r"\bisd\b": "IST",
     r"\bist\b": "IST",
+    r"\bi\.s\.t\.?\b": "IST",
     r"\bspace technology\b": "Space Technology",
     r"\baerospace\b": "Aerospace",
     r"\bavionics\b": "Avionics",

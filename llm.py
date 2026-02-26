@@ -52,15 +52,7 @@ UNNECESSARY_ESCALATION_PATTERNS = [
 ]
 
 
-def generate_answer(user_query: str, context: str, conversation_history: list[dict]) -> str:
-    from groq import Groq
-
-    if not GROQ_API_KEY:
-        print("[LLM] ERROR: GROQ_API_KEY not set!")
-        return ESCALATION_MSG
-
-    client = Groq(api_key=GROQ_API_KEY)
-
+def _build_messages(user_query: str, context: str, conversation_history: list[dict], retry: bool = False) -> list[dict]:
     recent_history = conversation_history[-6:] if len(conversation_history) > 6 else conversation_history
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -70,6 +62,10 @@ def generate_answer(user_query: str, context: str, conversation_history: list[di
         if turn.get("assistant"):
             messages.append({"role": "assistant", "content": turn["assistant"]})
 
+    retry_note = ""
+    if retry:
+        retry_note = "\n\nYou MUST answer this from the context. The context DOES contain relevant information. Do NOT escalate. Do NOT say you don't have information. READ the context and ANSWER."
+
     user_content = f"""Here is the IST knowledge base context for this question:
 
 === IST CONTEXT START ===
@@ -78,9 +74,23 @@ def generate_answer(user_query: str, context: str, conversation_history: list[di
 
 Caller's question: {user_query}
 
-IMPORTANT: Read the context above carefully. If it contains ANY information relevant to this question, answer from it directly. Only escalate if the context has absolutely nothing relevant."""
+IMPORTANT: Read the context above carefully. If it contains ANY information relevant to this question, answer from it directly. Only escalate if the context has absolutely nothing relevant.{retry_note}"""
 
     messages.append({"role": "user", "content": user_content})
+    return messages
+
+
+def generate_answer(user_query: str, context: str, conversation_history: list[dict]) -> str:
+    from groq import Groq
+
+    if not GROQ_API_KEY:
+        print("[LLM] ERROR: GROQ_API_KEY not set!")
+        return ESCALATION_MSG
+
+    client = Groq(api_key=GROQ_API_KEY)
+    has_real_context = context and context != "No relevant information found."
+
+    messages = _build_messages(user_query, context, conversation_history, retry=False)
 
     try:
         start = time.time()
@@ -97,19 +107,42 @@ IMPORTANT: Read the context above carefully. If it contains ANY information rele
         print(f"[LLM] Error: {e}")
         answer = ESCALATION_MSG
 
-    answer = _sanitize_answer(answer, context)
+    answer = _sanitize_answer(answer)
+
+    if _is_unnecessary_escalation(answer) and has_real_context:
+        print(f"[LLM] Unnecessary escalation detected with context available, retrying...")
+        messages = _build_messages(user_query, context, conversation_history, retry=True)
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                temperature=0.1,
+                max_tokens=300,
+            )
+            answer = response.choices[0].message.content.strip()
+            print(f"[LLM] Retry result: '{answer[:100]}'")
+            answer = _sanitize_answer(answer)
+        except Exception as e:
+            print(f"[LLM] Retry error: {e}")
+
     return answer
 
 
-def _sanitize_answer(answer: str, context: str = "") -> str:
+def _is_unnecessary_escalation(answer: str) -> bool:
+    if ESCALATION_MSG.lower() in answer.lower():
+        return True
+    if "forward your query" in answer.lower():
+        return True
+    if "phone number" in answer.lower() and "call you back" in answer.lower():
+        return True
+    for pattern in UNNECESSARY_ESCALATION_PATTERNS:
+        if re.search(pattern, answer, re.IGNORECASE):
+            return True
+    return False
+
+
+def _sanitize_answer(answer: str) -> str:
     for pattern in TECHNICAL_ISSUE_PATTERNS:
         if re.search(pattern, answer, re.IGNORECASE):
             return ESCALATION_MSG
-
-    if context and context != "No relevant information found.":
-        for pattern in UNNECESSARY_ESCALATION_PATTERNS:
-            if re.search(pattern, answer, re.IGNORECASE):
-                print(f"[LLM] WARNING: LLM tried to dodge when context exists, forcing re-answer is not possible, returning escalation")
-                return ESCALATION_MSG
-
     return answer
