@@ -1,0 +1,15 @@
+IST PROGRAMS, FEES, AND CLOSING MERIT – Computer Engineering, Software Engineering, Biotechnology
+
+PROGRAMS OFFERED (BS):
+IST offers the following undergraduate programs: Aerospace Engineering, Avionics Engineering, Electrical Engineering, Mechanical Engineering, Materials Science and Engineering, Computer Science, Computer Engineering, Software Engineering, Artificial Intelligence, Data Science, Space Science, Mathematics, Physics, Biotechnology. Computer Engineering and Software Engineering are offered under the Department of Computing (same as Computer Science, AI, Data Science).
+
+FEES (per semester, BS):
+- Department of Computing: BS Computer Science, BS Computer Engineering, BS Software Engineering, BS Artificial Intelligence, BS Data Science – all about 1 lakh 26 thousand rupees per semester.
+- Computer Engineering and Software Engineering: same as Computer Science, about 1 lakh 26 thousand rupees per semester.
+
+CLOSING MERIT (last 2 years – 2023 and 2024):
+- BS Computer Engineering: 2023 closing aggregate 76.8, 2024 closing aggregate 77.0.
+- BS Software Engineering: 2023 closing aggregate 76.5, 2024 closing aggregate 76.8.
+- BS Biotechnology: This program is offered for the first time this year. There is no previous closing merit data. Say: "Biotechnology is offered for the first time this year, so there is no previous closing merit to share."
+
+When the caller asks "does IST offer software engineering" or "do you have computer engineering": Yes, IST offers both BS Computer Engineering and BS Software Engineering under the Department of Computing. Fee is about 1 lakh 26 thousand per semester. Closing merit for last two years is in the data above. For Biotechnology say it is offered first time this year and no previous closing merit.
